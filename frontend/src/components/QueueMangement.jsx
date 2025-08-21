@@ -1,0 +1,383 @@
+import { useEffect, useState } from 'react';
+import axiosInstance from '../axiosConfig';
+import { useAuth } from '../context/AuthContext';
+
+const QueueManagement = () => {
+    const { user } = useAuth();
+    const [queues, setQueues] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [pageLoading, setPageLoading] = useState(true);
+    const [showQueueForm, setShowQueueForm] = useState(false);
+    const [editingQueue, setEditingQueue] = useState(null);
+    const [queueForm, setQueueForm] = useState({
+        name: '',
+        description: '',
+        maxCapacity: 50,
+        avgServiceTime: 10
+    });
+
+    useEffect(() => {
+        fetchQueues();
+    }, []);
+
+    const fetchQueues = async () => {
+        try {
+            const response = await axiosInstance.get('/api/queues');
+            setQueues(response.data.queues || []);
+        } catch (error) {
+            console.error('Failed to fetch queues:', error);
+        } finally {
+            setPageLoading(false);
+        }
+    };
+
+    const handleCreateQueue = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            await axiosInstance.post('/api/queues', queueForm, {
+                headers: { Authorization: `Bearer ${user.token}` }
+            });
+            alert('Queue created successfully!');
+            setShowQueueForm(false);
+            setQueueForm({ name: '', description: '', maxCapacity: 50, avgServiceTime: 10 });
+            fetchQueues();
+        } catch (error) {
+            alert(error.response?.data?.message || 'Failed to create queue');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleUpdateQueue = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            await axiosInstance.put(`/api/queues/${editingQueue._id}`, queueForm, {
+                headers: { Authorization: `Bearer ${user.token}` }
+            });
+            alert('Queue updated successfully!');
+            setEditingQueue(null);
+            setShowQueueForm(false);
+            setQueueForm({ name: '', description: '', maxCapacity: 50, avgServiceTime: 10 });
+            fetchQueues();
+        } catch (error) {
+            alert(error.response?.data?.message || 'Failed to update queue');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleDeleteQueue = async (queueId, queueName) => {
+        if (!window.confirm(`Are you sure you want to delete "${queueName}"? This action cannot be undone.`)) {
+            return;
+        }
+
+        try {
+            await axiosInstance.delete(`/api/queues/${queueId}`, {
+                headers: { Authorization: `Bearer ${user.token}` }
+            });
+            alert('Queue deleted successfully!');
+            fetchQueues();
+        } catch (error) {
+            alert(error.response?.data?.message || 'Failed to delete queue');
+        }
+    };
+
+    const handleEditQueue = (queue) => {
+        setEditingQueue(queue);
+        setQueueForm({
+            name: queue.name,
+            description: queue.description,
+            maxCapacity: queue.maxCapacity,
+            avgServiceTime: queue.avgServiceTime
+        });
+        setShowQueueForm(true);
+    };
+
+    const handleToggleQueueStatus = async (queueId, currentStatus) => {
+        try {
+            await axiosInstance.put(`/api/queues/${queueId}`, {
+                isActive: !currentStatus
+            }, {
+                headers: { Authorization: `Bearer ${user.token}` }
+            });
+            fetchQueues();
+        } catch (error) {
+            alert(error.response?.data?.message || 'Failed to update queue status');
+        }
+    };
+
+    const formatDateTime = (dateString) => {
+        return new Date(dateString).toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
+    if (pageLoading) {
+        return (
+            <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+        );
+    }
+
+    return (
+        <div>
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Queue Management</h2>
+                <button
+                    onClick={() => {
+                        setShowQueueForm(true);
+                        setEditingQueue(null);
+                        setQueueForm({ name: '', description: '', maxCapacity: 50, avgServiceTime: 10 });
+                    }}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors font-medium"
+                >
+                    + Create New Queue
+                </button>
+            </div>
+            {/* Queue Form Modal */}
+            {showQueueForm && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg p-6 w-full max-w-md">
+                        <h3 className="text-lg font-semibold mb-4">
+                            {editingQueue ? 'Edit Queue' : 'Create New Queue'}
+                        </h3>
+                        {/* ✅ Correctly using <form> instead of <div> */}
+                        <form onSubmit={editingQueue ? handleUpdateQueue : handleCreateQueue}>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Queue Name *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={queueForm.name}
+                                        onChange={(e) => setQueueForm({ ...queueForm, name: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        placeholder="e.g., Document Verification"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Description
+                                    </label>
+                                    <textarea
+                                        value={queueForm.description}
+                                        onChange={(e) => setQueueForm({ ...queueForm, description: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        placeholder="Brief description of the service..."
+                                        rows="3"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Maximum Capacity *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={queueForm.maxCapacity}
+                                        onChange={(e) => setQueueForm({ ...queueForm, maxCapacity: parseInt(e.target.value) })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        min="1"
+                                        max="500"
+                                        required
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">Maximum number of people allowed in queue</p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Average Service Time (minutes) *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={queueForm.avgServiceTime}
+                                        onChange={(e) => setQueueForm({ ...queueForm, avgServiceTime: parseInt(e.target.value) })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        min="1"
+                                        max="120"
+                                        required
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">Average time to serve one customer</p>
+                                </div>
+                            </div>
+                            <div className="flex justify-end space-x-3 mt-6">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowQueueForm(false)}
+                                    className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={loading}
+                                    className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                                >
+                                    {loading ? 'Saving...' : (editingQueue ? 'Update Queue' : 'Create Queue')}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Queues List */}
+            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                {queues.length > 0 ? (
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Queue Information
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Status
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Utilization
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Service Time
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Created
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Actions
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {queues.map((queue) => (
+                                    <tr key={queue._id} className="hover:bg-gray-50">
+                                        <td className="px-6 py-4">
+                                            <div>
+                                                <div className="text-sm font-medium text-gray-900">{queue.name}</div>
+                                                <div className="text-sm text-gray-500">{queue.description || 'No description'}</div>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="flex items-center">
+                                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${queue.isActive
+                                                    ? 'bg-green-100 text-green-800'
+                                                    : 'bg-red-100 text-red-800'
+                                                    }`}>
+                                                    {queue.isActive ? 'Active' : 'Inactive'}
+                                                </span>
+                                                <button
+                                                    onClick={() => handleToggleQueueStatus(queue._id, queue.isActive)}
+                                                    className="ml-2 text-xs text-blue-600 hover:text-blue-800"
+                                                >
+                                                    {queue.isActive ? 'Deactivate' : 'Activate'}
+                                                </button>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="text-sm text-gray-900">
+                                                {queue.currentCount}/{queue.maxCapacity}
+                                            </div>
+                                            <div className="w-16 bg-gray-200 rounded-full h-2 mt-1">
+                                                <div
+                                                    className="bg-blue-600 h-2 rounded-full"
+                                                    style={{
+                                                        width: `${Math.min((queue.currentCount / queue.maxCapacity) * 100, 100)}%`
+                                                    }}
+                                                ></div>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {queue.avgServiceTime} min
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {formatDateTime(queue.createdAt)}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                            <div className="flex space-x-2">
+                                                <button
+                                                    onClick={() => handleEditQueue(queue)}
+                                                    className="text-blue-600 hover:text-blue-900 transition-colors"
+                                                >
+                                                    Edit
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteQueue(queue._id, queue.name)}
+                                                    className="text-red-600 hover:text-red-900 transition-colors"
+                                                    disabled={queue.currentCount > 0}
+                                                >
+                                                    Delete
+                                                </button>
+                                            </div>
+                                            {queue.currentCount > 0 && (
+                                                <p className="text-xs text-gray-500 mt-1">
+                                                    Cannot delete: {queue.currentCount} active tokens
+                                                </p>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                ) : (
+                    <div className="text-center py-12">
+                        <div className="text-gray-400 text-6xl mb-4">🏢</div>
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">
+                            No Queues Created Yet
+                        </h3>
+                        <p className="text-gray-600 mb-4">
+                            Create your first queue to start managing customer flow.
+                        </p>
+                        <button
+                            onClick={() => {
+                                setShowQueueForm(true);
+                                setEditingQueue(null);
+                                setQueueForm({ name: '', description: '', maxCapacity: 50, avgServiceTime: 10 });
+                            }}
+                            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+                        >
+                            Create Your First Queue
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            {/* Queue Statistics Summary */}
+            {queues.length > 0 && (
+                <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                        <h4 className="font-medium text-blue-900">Total Queues</h4>
+                        <p className="text-2xl font-bold text-blue-700">{queues.length}</p>
+                    </div>
+                    <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                        <h4 className="font-medium text-green-900">Active Queues</h4>
+                        <p className="text-2xl font-bold text-green-700">
+                            {queues.filter(q => q.isActive).length}
+                        </p>
+                    </div>
+                    <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                        <h4 className="font-medium text-yellow-900">Total Capacity</h4>
+                        <p className="text-2xl font-bold text-yellow-700">
+                            {queues.reduce((sum, q) => sum + q.maxCapacity, 0)}
+                        </p>
+                    </div>
+                    <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                        <h4 className="font-medium text-purple-900">Current Utilization</h4>
+                        <p className="text-2xl font-bold text-purple-700">
+                            {queues.reduce((sum, q) => sum + q.currentCount, 0)}
+                        </p>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default QueueManagement;
