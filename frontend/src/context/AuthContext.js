@@ -113,8 +113,8 @@ export const AuthProvider = ({ children }) => {
     loading,
     getAuthHeader,
     authenticatedRequest,
-    validateAndLoadUser,
-    debugAuth
+    validateAndLoadUser
+    
   };
 
   return (

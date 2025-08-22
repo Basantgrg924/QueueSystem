@@ -4,7 +4,7 @@ const {
     getAllQueues,
     getQueueById,
 
-} = require('../controllers/QueueController');
+} = require('../controllers/queueController');
 const { protect, adminOnly } = require('../middleware/authMiddleware');
 
 const router = express.Router();
