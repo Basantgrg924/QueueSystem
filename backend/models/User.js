@@ -1,4 +1,3 @@
-
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 
@@ -9,7 +8,7 @@ const userSchema = new mongoose.Schema({
     address: { type: String },
     role: {
         type: String,
-        enum: ["admin", "staff","user"],
+        enum: ["admin", "staff", "user"],
         required: true,
         default: "user"
     },
@@ -17,7 +16,7 @@ const userSchema = new mongoose.Schema({
 
 userSchema.pre('save', async function (next) {
     if (!this.isModified('password')) return next();
-    this.password = await bcrypt.hash(this.password, salt);
+    next();
 });
 
 module.exports = mongoose.model('User', userSchema);
