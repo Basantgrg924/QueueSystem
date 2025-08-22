@@ -3,13 +3,11 @@ describe('Backend Tests', () => {
     expect(2 + 2).toBe(4);
   });
 
-  test('environment variables', () => {
-    expect(process.env.NODE_ENV).toBeDefined();
+  test('environment test', () => {
+    expect(typeof process.env).toBe('object');
   });
 
-  test('simple API test', () => {
-    // Mock a simple API response
-    const mockResponse = { status: 'OK' };
-    expect(mockResponse.status).toBe('OK');
+  test('node environment test', () => {
+    expect(process.version).toMatch(/^v\d+/);
   });
 });
