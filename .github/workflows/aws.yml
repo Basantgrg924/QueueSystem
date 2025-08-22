@@ -1,0 +1,338 @@
+name: Queue System - CI/CD Pipeline
+
+on:
+  # Trigger on pushes to main (including merged PRs)
+  push:
+    branches: [ main ]
+  
+  # Trigger on pull requests to main (for testing only)
+  pull_request:
+    branches: [ main ]
+    types: [ opened, synchronize, reopened ]
+
+env:
+  FRONTEND_IMAGE_NAME: frontend-app
+  BACKEND_IMAGE_NAME: backend-api
+  NODE_VERSION: '18'
+
+jobs:
+  # Frontend Tests
+  test-frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run linting
+      run: npm run lint
+    
+    - name: Run tests
+      run: npm test -- --coverage --watchAll=false
+    
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: frontend-test-results
+        path: frontend/coverage/
+
+  # Backend Tests
+  test-backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+    
+    services:
+      mongodb:
+        image: mongo:7.0
+        env:
+          MONGO_INITDB_ROOT_USERNAME: root
+          MONGO_INITDB_ROOT_PASSWORD: password
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand({ping: 1})'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: backend/package-lock.json
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run linting
+      run: npm run lint
+    
+    - name: Run tests
+      run: npm test
+      env:
+        MONGODB_URI: mongodb://root:password@localhost:27017/test?authSource=admin
+        NODE_ENV: test
+        JWT_SECRET: test-secret
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: backend-test-results
+        path: backend/coverage/
+
+  # Build Docker Images (only on merged PRs to main)
+  build:
+    needs: [test-frontend, test-backend]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Build Frontend Docker Image
+      run: |
+        cd frontend
+        docker build -t ${{ env.FRONTEND_IMAGE_NAME }}:${{ github.sha }} .
+        docker tag ${{ env.FRONTEND_IMAGE_NAME }}:${{ github.sha }} ${{ env.FRONTEND_IMAGE_NAME }}:latest
+    
+    - name: Build Backend Docker Image
+      run: |
+        cd backend
+        docker build -t ${{ env.BACKEND_IMAGE_NAME }}:${{ github.sha }} .
+        docker tag ${{ env.BACKEND_IMAGE_NAME }}:${{ github.sha }} ${{ env.BACKEND_IMAGE_NAME }}:latest
+    
+    - name: Save Docker Images as Artifacts
+      run: |
+        docker save ${{ env.FRONTEND_IMAGE_NAME }}:latest | gzip > frontend-image.tar.gz
+        docker save ${{ env.BACKEND_IMAGE_NAME }}:latest | gzip > backend-image.tar.gz
+    
+    - name: Upload Frontend Image
+      uses: actions/upload-artifact@v4
+      with:
+        name: frontend-docker-image
+        path: frontend-image.tar.gz
+        retention-days: 1
+    
+    - name: Upload Backend Image
+      uses: actions/upload-artifact@v4
+      with:
+        name: backend-docker-image
+        path: backend-image.tar.gz
+        retention-days: 1
+
+  # Deploy to EC2 (only on merged PRs to main)
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    
+    steps:
+    - name: Download Frontend Image
+      uses: actions/download-artifact@v4
+      with:
+        name: frontend-docker-image
+    
+    - name: Download Backend Image
+      uses: actions/download-artifact@v4
+      with:
+        name: backend-docker-image
+    
+    - name: Prepare EC2 Environment
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USERNAME }}
+        key: ${{ secrets.EC2_PRIVATE_KEY }}
+        script: |
+          # Create application directory structure
+          mkdir -p ~/app/{frontend,backend,logs}
+          
+          # Ensure Docker is running
+          sudo systemctl start docker
+          sudo systemctl enable docker
+          
+          # Ensure MongoDB is running
+          sudo systemctl start mongod
+          sudo systemctl enable mongod
+          
+          # Wait for MongoDB to be ready
+          timeout 30 bash -c 'until mongosh --eval "db.adminCommand({ping: 1})" >/dev/null 2>&1; do sleep 2; done' || echo "MongoDB check timeout"
+          
+          # Create environment file for backend
+          cat > ~/app/backend/.env << EOF
+          NODE_ENV=production
+          PORT=5001
+          MONGODB_URI=mongodb://localhost:27017/myapp_production
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          FRONTEND_URL=http://${{ secrets.EC2_HOST }}
+          EOF
+          
+          # Create docker-compose file for easier management
+          cat > ~/app/docker-compose.yml << 'EOF'
+          version: '3.8'
+          services:
+            backend:
+              image: backend-api:latest
+              container_name: backend
+              restart: unless-stopped
+              ports:
+                - "5001:5001"
+              volumes:
+                - ./backend/.env:/app/.env:ro
+                - ./logs:/app/logs
+              network_mode: host
+              healthcheck:
+                test: ["CMD", "curl", "-f", "http://localhost:5001/api/health"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+            
+            frontend:
+              image: frontend-app:latest
+              container_name: frontend
+              restart: unless-stopped
+              ports:
+                - "80:80"
+              depends_on:
+                - backend
+              healthcheck:
+                test: ["CMD", "curl", "-f", "http://localhost/health"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+          EOF
+    
+    - name: Copy Docker Images to EC2
+      uses: appleboy/scp-action@v0.1.4
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USERNAME }}
+        key: ${{ secrets.EC2_PRIVATE_KEY }}
+        source: "frontend-image.tar.gz,backend-image.tar.gz"
+        target: ~/app/
+    
+    - name: Deploy Applications to EC2
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USERNAME }}
+        key: ${{ secrets.EC2_PRIVATE_KEY }}
+        script: |
+          cd ~/app
+          
+          echo "Starting deployment process..."
+          
+          # Load new Docker images
+          echo "Loading Docker images..."
+          gunzip -c frontend-image.tar.gz | docker load
+          gunzip -c backend-image.tar.gz | docker load
+          
+          # Stop existing containers gracefully
+          echo "Stopping existing containers..."
+          docker-compose down --timeout 30 || true
+          
+          # Clean up old containers and unused images
+          echo "Cleaning up old resources..."
+          docker container prune -f
+          docker image prune -f
+          
+          # Start new containers
+          echo "Starting new containers..."
+          docker-compose up -d
+          
+          # Wait for services to be ready
+          echo "Waiting for services to start..."
+          sleep 30
+          
+          # Health check backend
+          echo "Checking backend health..."
+          for i in {1..12}; do
+            if curl -f http://localhost:5001/api/health >/dev/null 2>&1; then
+              echo "Backend is healthy!"
+              break
+            fi
+            echo "Backend health check attempt $i/12..."
+            sleep 5
+          done
+          
+          # Health check frontend
+          echo "🔍 Checking frontend health..."
+          for i in {1..12}; do
+            if curl -f http://localhost/health >/dev/null 2>&1; then
+              echo "Frontend is healthy!"
+              break
+            fi
+            echo "Frontend health check attempt $i/12..."
+            sleep 5
+          done
+          
+          # Final verification
+          echo "Final deployment verification..."
+          docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+          
+          # Test endpoints
+          BACKEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5001/api/health || echo "000")
+          FRONTEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/health || echo "000")
+          
+          if [ "$BACKEND_STATUS" = "200" ] && [ "$FRONTEND_STATUS" = "200" ]; then
+            echo "Deployment successful!"
+            echo "Frontend: http://${{ secrets.EC2_HOST }}"
+            echo "Backend API: http://${{ secrets.EC2_HOST }}:5001/api/health"
+          else
+            echo "Deployment verification failed!"
+            echo "Backend status: $BACKEND_STATUS"
+            echo "Frontend status: $FRONTEND_STATUS"
+            exit 1
+          fi
+          
+          # Clean up downloaded files
+          rm -f frontend-image.tar.gz backend-image.tar.gz
+          
+          echo "Deployment completed successfully!"
+    
+    - name: Deployment Summary
+      if: always()
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USERNAME }}
+        key: ${{ secrets.EC2_PRIVATE_KEY }}
+        script: |
+          echo "========================="
+          echo "DEPLOYMENT SUMMARY"
+          echo "========================="
+          echo "Time: $(date)"
+          echo "Commit: ${{ github.sha }}"
+          echo "Author: ${{ github.actor }}"
+          echo "Frontend: http://${{ secrets.EC2_HOST }}"
+          echo "Backend: http://${{ secrets.EC2_HOST }}:5001/api/health"
+          echo "Container Status:"
+          docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | head -3
+          echo "========================="
