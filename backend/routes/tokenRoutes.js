@@ -7,7 +7,7 @@ const {
     updateTokenStatus,
     cancelToken,
     getQueueHistory, getUserTokenHistory
-} = require('../controllers/TokenController');
+} = require('../controllers/tokenController');
 const { protect, staffOnly } = require('../middleware/authMiddleware');
 const { auditMiddleware } = require('../middleware/auditMiddleware');
 
