@@ -14,6 +14,10 @@ app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/queues', queueRoutes);
 app.use('/api/tokens', tokenRoutes);
 
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'OK', message: 'Server is running' });
+});
+
 if (require.main === module) {
   connectDB();
   const PORT = process.env.PORT || 5001;

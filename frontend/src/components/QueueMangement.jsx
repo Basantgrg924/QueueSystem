@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import axiosInstance from '../axiosConfig';
 import { useAuth } from '../context/AuthContext';
+import { Building2 } from 'lucide-react';
 
 const QueueManagement = () => {
     const { user } = useAuth();
@@ -148,7 +149,6 @@ const QueueManagement = () => {
                         <h3 className="text-lg font-semibold mb-4">
                             {editingQueue ? 'Edit Queue' : 'Create New Queue'}
                         </h3>
-                        {/* ✅ Correctly using <form> instead of <div> */}
                         <form onSubmit={editingQueue ? handleUpdateQueue : handleCreateQueue}>
                             <div className="space-y-4">
                                 <div>
@@ -328,7 +328,9 @@ const QueueManagement = () => {
                     </div>
                 ) : (
                     <div className="text-center py-12">
-                        <div className="text-gray-400 text-6xl mb-4">🏢</div>
+                        <div className="text-gray-400 text-6xl mb-4">
+                            <Building2 className="w-16 h-16 mx-auto" />
+                        </div>
                         <h3 className="text-lg font-medium text-gray-900 mb-2">
                             No Queues Created Yet
                         </h3>
