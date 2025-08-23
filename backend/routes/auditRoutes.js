@@ -4,7 +4,7 @@ const {
     getAuditStats,
     getAuditFilters,
     cleanupAuditLogs
-} = require('../controllers/AuditLogController');
+} = require('../controllers/auditLogController');
 const { protect, adminOnly } = require('../middleware/authMiddleware');
 const { auditMiddleware } = require('../middleware/auditMiddleware');
 
