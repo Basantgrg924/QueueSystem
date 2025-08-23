@@ -2,6 +2,7 @@ const express = require('express');
 const {
     createQueue,
     getAllQueues,
+    getAllQueuesForAdmin,
     getQueueById,
     updateQueue,
     deleteQueue,
@@ -13,16 +14,15 @@ const { auditMiddleware } = require('../middleware/auditMiddleware');
 const router = express.Router();
 
 // Public routes (no authentication needed)
+router.get('/', getAllQueues);
 router.get('/:id', getQueueById);
 router.get('/:queueId/position', getQueuePosition);
 
 // Protected routes (require authentication)
 router.use(protect);
 
-// Routes that check user role internally
-router.get('/', getAllQueues);
-
 // Admin only routes
+router.get('/admin/manage', adminOnly, getAllQueuesForAdmin); // Admin gets all queues (active + inactive)
 router.post('/', adminOnly, auditMiddleware('QUEUE_CREATED', 'Queue'), createQueue);
 router.put('/:id', adminOnly, auditMiddleware('QUEUE_UPDATED', 'Queue'), updateQueue);
 router.delete('/:id', adminOnly, auditMiddleware('QUEUE_DELETED', 'Queue'), deleteQueue);

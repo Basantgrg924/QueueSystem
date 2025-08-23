@@ -48,16 +48,13 @@ const createQueue = async (req, res) => {
     }
 };
 
-// Get all queues
+// Get all queues (Public - only active queues for users/staff)
 const getAllQueues = async (req, res) => {
     try {
-        // Check if user is authenticated and is admin to show all queues
-        const showAll = req.user && req.user.role === 'admin';
+        // For public access, always show only active queues
+        console.log('Public getAllQueues called');
         
-        const query = showAll ? {} : { isActive: true };
-        console.log('getAllQueues - showAll:', showAll, 'query:', query);
-        
-        const queues = await Queue.find(query)
+        const queues = await Queue.find({ isActive: true })
             .populate('createdBy', 'name email')
             .sort({ createdAt: -1 });
 
@@ -73,7 +70,7 @@ const getAllQueues = async (req, res) => {
             return queueObj;
         }));
 
-        console.log(`Returning ${queuesWithCount.length} queues`);
+        console.log(`Public endpoint returning ${queuesWithCount.length} active queues`);
 
         res.status(200).json({
             success: true,
@@ -85,6 +82,45 @@ const getAllQueues = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error fetching queues',
+            error: error.message
+        });
+    }
+};
+
+// Get all queues for admin management (includes inactive queues)
+const getAllQueuesForAdmin = async (req, res) => {
+    try {
+        console.log('Admin getAllQueuesForAdmin called');
+        
+        // For admin, show ALL queues (active + inactive)
+        const queues = await Queue.find({})
+            .populate('createdBy', 'name email')
+            .sort({ createdAt: -1 });
+
+        // Add current active count to each queue
+        const queuesWithCount = await Promise.all(queues.map(async (queue) => {
+            const activeCount = await Token.countDocuments({
+                queueId: queue._id,
+                status: { $in: ['waiting', 'called', 'serving'] }
+            });
+            
+            const queueObj = queue.toObject();
+            queueObj.currentCount = activeCount;
+            return queueObj;
+        }));
+
+        console.log(`Admin endpoint returning ${queuesWithCount.length} total queues (active + inactive)`);
+
+        res.status(200).json({
+            success: true,
+            count: queuesWithCount.length,
+            queues: queuesWithCount
+        });
+    } catch (error) {
+        console.error('Error in getAllQueuesForAdmin:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching admin queues',
             error: error.message
         });
     }
@@ -273,6 +309,7 @@ const getQueuePosition = async (req, res) => {
 module.exports = {
     createQueue,
     getAllQueues,
+    getAllQueuesForAdmin,
     getQueueById,
     updateQueue,
     deleteQueue,

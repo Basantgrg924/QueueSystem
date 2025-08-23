@@ -50,17 +50,26 @@ const calculateCurrentPosition = async (token) => {
 // Generate new token
 const generateToken = async (req, res) => {
     try {
+        console.log('Token generation started for user:', req.user?.id);
+        console.log('Request body:', req.body);
+        
         const { queueId } = req.body;
 
         if (!queueId) {
+            console.log('Error: Queue ID missing');
             return res.status(400).json({
                 success: false,
                 message: 'Queue ID is required'
             });
         }
 
+        console.log('Looking for queue with ID:', queueId);
         const queue = await Queue.findById(queueId);
+        console.log('Queue found:', queue ? 'Yes' : 'No');
+        console.log('Queue active:', queue?.isActive);
+        
         if (!queue || !queue.isActive) {
+            console.log('Error: Queue not found or inactive');
             return res.status(404).json({
                 success: false,
                 message: 'Queue not found or inactive'
@@ -110,6 +119,7 @@ const generateToken = async (req, res) => {
             tokenNumber,
             queueId,
             userId: req.user.id,
+            position: tokensAhead + 1,
             estimatedCallTime
         };
 
@@ -139,6 +149,7 @@ const generateToken = async (req, res) => {
         });
     } catch (error) {
         console.error('Token generation error:', error);
+        console.error('Error stack:', error.stack);
         res.status(500).json({
             success: false,
             message: 'Error generating token',
