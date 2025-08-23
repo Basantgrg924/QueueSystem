@@ -7,8 +7,9 @@ const {
     updateTokenStatus,
     cancelToken,
     getQueueHistory, getUserTokenHistory
-} = require('../controllers/tokenController');
+} = require('../controllers/TokenController');
 const { protect, staffOnly } = require('../middleware/authMiddleware');
+const { auditMiddleware } = require('../middleware/auditMiddleware');
 
 const router = express.Router();
 
@@ -16,15 +17,15 @@ const router = express.Router();
 router.use(protect);
 
 // User routes
-router.post('/generate', generateToken);
+router.post('/generate', auditMiddleware('TOKEN_GENERATED', 'Token'), generateToken);
 router.get('/my-tokens', getUserTokens);
-router.patch('/:id/cancel', cancelToken);
-router.get('/my-history', getUserTokenHistory); // Add this route
+router.patch('/:id/cancel', auditMiddleware('TOKEN_CANCELLED', 'Token'), cancelToken);
+router.get('/my-history', getUserTokenHistory);
 router.get('/:id', getTokenDetails);
 
 // Staff only routes
-router.post('/queue/:queueId/call-next', staffOnly, callNextToken);
-router.patch('/:id/status', staffOnly, updateTokenStatus);
+router.post('/queue/:queueId/call-next', staffOnly, auditMiddleware('TOKEN_CALLED', 'Token'), callNextToken);
+router.patch('/:id/status', staffOnly, auditMiddleware('TOKEN_STATUS_UPDATED', 'Token'), updateTokenStatus);
 router.get('/queue/:queueId/history', staffOnly, getQueueHistory);
 
 module.exports = router;

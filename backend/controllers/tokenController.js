@@ -250,12 +250,13 @@ const getTokenDetails = async (req, res) => {
 const callNextToken = async (req, res) => {
     try {
         const { queueId } = req.params;
+        const io = req.app.get('io');
 
         // Find the next waiting token (lowest token number)
         const nextToken = await Token.findOne({
             queueId,
             status: 'waiting'
-        }).sort({ tokenNumber: 1 }).populate('userId', 'name email');
+        }).sort({ tokenNumber: 1 }).populate('userId', 'name email').populate('queueId', 'name');
 
         if (!nextToken) {
             return res.status(404).json({
@@ -268,6 +269,22 @@ const callNextToken = async (req, res) => {
         nextToken.status = 'called';
         nextToken.calledAt = new Date();
         await nextToken.save();
+
+        // Emit real-time notification to the specific user
+        io.to(`user-${nextToken.userId._id}`).emit('token-called', {
+            tokenNumber: nextToken.tokenNumber,
+            queueName: nextToken.queueId.name,
+            calledAt: nextToken.calledAt,
+            message: `Your token ${nextToken.tokenNumber} has been called! Please proceed to the service counter.`
+        });
+
+        // Emit queue update to all users in the queue room
+        io.to(`queue-${queueId}`).emit('queue-updated', {
+            queueId,
+            type: 'token-called',
+            tokenNumber: nextToken.tokenNumber,
+            userName: nextToken.userId.name
+        });
 
         res.status(200).json({
             success: true,
@@ -293,8 +310,9 @@ const updateTokenStatus = async (req, res) => {
     try {
         const { status, notes } = req.body;
         const tokenId = req.params.id;
+        const io = req.app.get('io');
 
-        const token = await Token.findById(tokenId).populate('userId', 'name email');
+        const token = await Token.findById(tokenId).populate('userId', 'name email').populate('queueId', 'name');
         if (!token) {
             return res.status(404).json({
                 success: false,
@@ -315,6 +333,7 @@ const updateTokenStatus = async (req, res) => {
             });
         }
 
+        const oldStatus = token.status;
         token.status = status;
         token.notes = notes || token.notes;
 
@@ -339,6 +358,35 @@ const updateTokenStatus = async (req, res) => {
             queue.currentCount = activeCount;
             await queue.save();
         }
+
+        // Emit real-time notification to the specific user
+        const statusMessages = {
+            'serving': `Your token ${token.tokenNumber} is now being served.`,
+            'completed': `Your service for token ${token.tokenNumber} has been completed.`,
+            'cancelled': `Your token ${token.tokenNumber} has been cancelled.`,
+            'no-show': `Token ${token.tokenNumber} marked as no-show.`
+        };
+
+        if (statusMessages[status]) {
+            io.to(`user-${token.userId._id}`).emit('token-status-updated', {
+                tokenNumber: token.tokenNumber,
+                queueName: token.queueId.name,
+                oldStatus,
+                newStatus: status,
+                message: statusMessages[status],
+                updatedAt: new Date()
+            });
+        }
+
+        // Emit queue update to all users in the queue room
+        io.to(`queue-${token.queueId._id}`).emit('queue-updated', {
+            queueId: token.queueId._id,
+            type: 'token-status-updated',
+            tokenNumber: token.tokenNumber,
+            oldStatus,
+            newStatus: status,
+            userName: token.userId.name
+        });
 
         res.status(200).json({
             success: true,
