@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import axiosInstance from '../axiosConfig';
 import { Users } from 'lucide-react';
@@ -27,11 +27,7 @@ const UserManagement = () => {
     total: 0
   });
 
-  useEffect(() => {
-    fetchUsers();
-  }, [userFilters]);
-
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setPageLoading(true);
     try {
       const response = await axiosInstance.get('/api/admin/users', {
@@ -69,7 +65,11 @@ const UserManagement = () => {
     } finally {
       setPageLoading(false);
     }
-  };
+  }, [user.token, userFilters.role, userFilters.search]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
 
   const handleCreateUser = async () => {
     if (!userForm.name || !userForm.email || !userForm.password) {

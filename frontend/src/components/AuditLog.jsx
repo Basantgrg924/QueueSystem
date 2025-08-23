@@ -14,7 +14,7 @@ import {
     User,
     XCircle
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import axiosInstance from '../axiosConfig';
 import { useAuth } from '../context/AuthContext';
 
@@ -45,15 +45,9 @@ const AuditLog = () => {
     });
     const [loading, setLoading] = useState(false);
     const [showFilters, setShowFilters] = useState(false);
-    const [selectedTimeRange, setSelectedTimeRange] = useState('7d');
+    const selectedTimeRange = '7d';
 
-    useEffect(() => {
-        fetchAuditLogs();
-        fetchFilterOptions();
-        fetchStats();
-    }, [pagination.currentPage, filters]);
-
-    const fetchAuditLogs = async () => {
+    const fetchAuditLogs = useCallback(async () => {
         setLoading(true);
         try {
             const params = new URLSearchParams({
@@ -80,9 +74,9 @@ const AuditLog = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [pagination.currentPage, pagination.limit, filters, user.token]);
 
-    const fetchStats = async () => {
+    const fetchStats = useCallback(async () => {
         try {
             const response = await axiosInstance.get(`/api/audit/stats?timeRange=${selectedTimeRange}`, {
                 headers: { Authorization: `Bearer ${user.token}` }
@@ -91,9 +85,9 @@ const AuditLog = () => {
         } catch (error) {
             console.error('Failed to fetch audit stats:', error);
         }
-    };
+    }, [selectedTimeRange, user.token]);
 
-    const fetchFilterOptions = async () => {
+    const fetchFilterOptions = useCallback(async () => {
         try {
             const response = await axiosInstance.get('/api/audit/filters', {
                 headers: { Authorization: `Bearer ${user.token}` }
@@ -102,7 +96,13 @@ const AuditLog = () => {
         } catch (error) {
             console.error('Failed to fetch filter options:', error);
         }
-    };
+    }, [user.token]);
+
+    useEffect(() => {
+        fetchAuditLogs();
+        fetchFilterOptions();
+        fetchStats();
+    }, [fetchAuditLogs, fetchFilterOptions, fetchStats]);
 
     const handleFilterChange = (key, value) => {
         setFilters(prev => ({ ...prev, [key]: value }));
