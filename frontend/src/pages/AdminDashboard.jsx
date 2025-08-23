@@ -1,4 +1,4 @@
-import { BarChart3, Building2, LogOut, Shield, Users } from 'lucide-react';
+import { BarChart3, Building2, Shield, Users } from 'lucide-react';
 import { useState } from 'react';
 import AdminOverview from '../components/AdminOverview';
 import AuditLog from '../components/AuditLog';
@@ -55,37 +55,7 @@ const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Navigation Header */}
-      <nav className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-blue-600">QueueMS Admin</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="hidden md:flex items-center space-x-2">
-                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm font-medium">
-                    {user?.name?.charAt(0)?.toUpperCase() || 'A'}
-                  </span>
-                </div>
-                <div className="text-sm">
-                  <p className="text-gray-900 font-medium">{user?.name}</p>
-                  <p className="text-gray-500">Administrator</p>
-                </div>
-              </div>
-              <button
-                onClick={logout}
-                className="text-gray-500 hover:text-red-600 transition-colors flex items-center space-x-1"
-              >
-                <LogOut className="w-5 h-5" />
-                <span className="hidden md:inline">Logout</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
-
+      
       <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         {/* Tab Navigation */}
         <div className="bg-white rounded-lg shadow mb-6">

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import axiosInstance from '../axiosConfig';
-import { Users } from 'lucide-react';
+import { Users, AlertTriangle, Trash2 } from 'lucide-react';
 
 const UserManagement = () => {
   const { user } = useAuth();
@@ -27,8 +27,8 @@ const UserManagement = () => {
     total: 0
   });
 
-  const fetchUsers = useCallback(async () => {
-    setPageLoading(true);
+  const fetchUsers = useCallback(async (resetPagination = true) => {
+    if (resetPagination) setPageLoading(true);
     try {
       const response = await axiosInstance.get('/api/admin/users', {
         headers: { Authorization: `Bearer ${user.token}` },
@@ -47,18 +47,29 @@ const UserManagement = () => {
       setUsers([
         {
           _id: '1',
-          name: 'John Admin',
+          name: 'System Administrator',
           email: 'admin@example.com',
           role: 'admin',
-          university: 'Tech University',
+          university: 'System Default',
+          isDefaultAccount: true,
           createdAt: new Date().toISOString()
         },
         {
           _id: '2',
+          name: 'John Admin',
+          email: 'johnadmin@example.com',
+          role: 'admin',
+          university: 'Tech University',
+          isDefaultAccount: false,
+          createdAt: new Date().toISOString()
+        },
+        {
+          _id: '3',
           name: 'Jane Staff',
           email: 'staff@example.com',
           role: 'staff',
           university: 'Service College',
+          isDefaultAccount: false,
           createdAt: new Date().toISOString()
         }
       ]);
@@ -67,9 +78,53 @@ const UserManagement = () => {
     }
   }, [user.token, userFilters.role, userFilters.search]);
 
+  // Simple initial fetch without dependencies that cause refresh
   useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+    if (user.token) {
+      fetchUsers();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Handle search input change with local state management only
+  const handleSearchChange = (value) => {
+    // Update local state immediately for responsive UI
+    setUserFilters(prev => ({ ...prev, search: value }));
+    
+    // Don't trigger any navigation or API calls here
+    // Let the debounced effect handle the actual search
+  };
+
+  // Debounced search effect - completely separate from input handling
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      // Only make API call, don't cause any navigation
+      const performSearch = async () => {
+        try {
+          const response = await axiosInstance.get('/api/admin/users', {
+            headers: { Authorization: `Bearer ${user.token}` },
+            params: {
+              role: userFilters.role === 'all' ? undefined : userFilters.role,
+              search: userFilters.search || undefined,
+              page: 1,
+              limit: 20
+            }
+          });
+          setUsers(response.data.users || []);
+          setPagination(response.data.pagination || { current: 1, pages: 1, total: 0 });
+        } catch (error) {
+          console.error('Search failed:', error);
+          // Fallback to mock data on error, no page refresh
+        }
+      };
+      
+      if (user.token) {
+        performSearch();
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [userFilters.search, userFilters.role, user.token]);
 
   const handleCreateUser = async () => {
     if (!userForm.name || !userForm.email || !userForm.password) {
@@ -114,7 +169,13 @@ const UserManagement = () => {
     }
   };
 
-  const handleUpdateUserRole = async (userId, newRole, userName) => {
+  const handleUpdateUserRole = async (userId, newRole, userName, userData) => {
+    // Prevent changing default admin account
+    if (userData.isDefaultAccount && userData.role === 'admin') {
+      alert('Cannot change the role of the default admin account for security reasons.');
+      return;
+    }
+
     if (!window.confirm(`Change ${userName}'s role to ${newRole}?`)) {
       return;
     }
@@ -130,6 +191,20 @@ const UserManagement = () => {
     } catch (error) {
       alert(error.response?.data?.message || 'Failed to update user role');
     }
+  };
+
+  const isDefaultAdmin = (userData) => {
+    return userData.isDefaultAccount && userData.role === 'admin';
+  };
+
+  const getWarningTooltip = (userData) => {
+    if (isDefaultAdmin(userData)) {
+      return 'This is the default admin account and cannot be changed for security reasons.';
+    }
+    if (userData._id === user.id) {
+      return 'You cannot change your own role or delete your own account.';
+    }
+    return null;
   };
 
   const handleDeleteUser = async (userId, userName) => {
@@ -176,55 +251,75 @@ const UserManagement = () => {
   }
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">User Management</h2>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
+          <p className="text-sm text-gray-600 mt-1 text">Manage user accounts and permissions</p>
+        </div>
         <button
           onClick={() => {
             setShowUserForm(true);
             setUserForm({ name: '', email: '', password: '', role: 'user', university: '', address: '' });
           }}
-          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors font-medium"
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-semibold text-sm shadow-sm"
         >
           + Create New User
         </button>
       </div>
 
       {/* User Filters */}
-      <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 mb-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Filter by Role
-          </label>
-          <select
-            value={userFilters.role}
-            onChange={(e) => setUserFilters({ ...userFilters, role: e.target.value })}
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="all">All Roles</option>
-            <option value="admin">Admin</option>
-            <option value="staff">Staff</option>
-            <option value="user">User</option>
-          </select>
-        </div>
-        <div className="flex-1">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Search Users
-          </label>
-          <div className="flex">
-            <input
-              type="text"
-              placeholder="Search by name or email..."
-              value={userFilters.search}
-              onChange={(e) => setUserFilters({ ...userFilters, search: e.target.value })}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              onClick={fetchUsers}
-              className="px-4 py-2 bg-gray-600 text-white rounded-r-md hover:bg-gray-700 transition-colors"
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+        <h2 className="text-lg font-semibold text-gray-900 mb-2">Filters</h2>
+        <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-6">
+          <div className="min-w-[200px]">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Filter by Role
+            </label>
+            <select
+              value={userFilters.role}
+              onChange={(e) => {
+                e.stopPropagation();
+                setUserFilters(prev => ({ ...prev, role: e.target.value }));
+              }}
+              className="w-full px-3 py-2 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              Search
-            </button>
+              <option value="all">All Roles</option>
+              <option value="admin">Admin</option>
+              <option value="staff">Staff</option>
+              <option value="user">User</option>
+            </select>
+          </div>
+          <div className="flex-1">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Search Users
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search by name or email..."
+                value={userFilters.search}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  handleSearchChange(e.target.value);
+                }}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    return false;
+                  }
+                }}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  return false;
+                }}
+                className="w-full px-3 py-2 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 pr-10"
+              />
+              <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -335,88 +430,107 @@ const UserManagement = () => {
       )}
 
       {/* Users Table */}
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
         {users.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-8 py-4 text-left text-base font-semibold text-gray-900 tracking-wide">
                     User Information
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-8 py-4 text-left text-base font-semibold text-gray-900 tracking-wide">
                     Role
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-8 py-4 text-left text-base font-semibold text-gray-900 tracking-wide">
                     University
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-8 py-4 text-left text-base font-semibold text-gray-900 tracking-wide">
                     Created
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-8 py-4 text-left text-base font-semibold text-gray-900 tracking-wide">
                     Actions
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {users.map((userData) => (
-                  <tr key={userData._id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
+                  <tr key={userData._id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-8 py-4">
                       <div>
-                        <div className="text-sm font-medium text-gray-900">{userData.name}</div>
-                        <div className="text-sm text-gray-500">{userData.email}</div>
+                        <div className="text-base font-semibold text-gray-900">{userData.name}</div>
+                        <div className="text-sm text-gray-600 mt-1">{userData.email}</div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(userData.role)}`}>
+                    <td className="px-8 py-6 whitespace-nowrap">
+                      <span className={`px-3 py-2 rounded-full text-sm font-semibold ${getRoleColor(userData.role)}`}>
                         {userData.role.charAt(0).toUpperCase() + userData.role.slice(1)}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-8 py-6 whitespace-nowrap text-sm text-gray-700">
                       {userData.university || 'Not specified'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-8 py-6 whitespace-nowrap text-sm text-gray-700">
                       {formatDateTime(userData.createdAt)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex flex-col space-y-1">
+                    <td className="px-8 py-6 whitespace-nowrap">
+                      <div className="flex items-center space-x-3">
+                        {/* Warning Icon with Tooltip */}
+                        {getWarningTooltip(userData) && (
+                          <div className="relative group">
+                            <AlertTriangle className="w-5 h-5 text-yellow-500" />
+                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 pointer-events-none shadow-lg">
+                              {getWarningTooltip(userData)}
+                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-yellow-200"></div>
+                            </div>
+                          </div>
+                        )}
+
                         {/* Role Change Buttons */}
-                        <div className="flex space-x-1">
-                          {userData.role !== 'admin' && (
+                        <div className="flex space-x-2">
+                          {userData.role !== 'admin' && !isDefaultAdmin(userData) && (
                             <button
-                              onClick={() => handleUpdateUserRole(userData._id, 'admin', userData.name)}
-                              className="text-xs text-red-600 hover:text-red-900 transition-colors"
+                              onClick={() => handleUpdateUserRole(userData._id, 'admin', userData.name, userData)}
+                              className="px-3 py-2 text-sm bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                               disabled={userData._id === user.id}
+                              title={userData._id === user.id ? 'Cannot change your own role' : 'Make Admin'}
                             >
-                              Make Admin
+                              Admin
                             </button>
                           )}
-                          {userData.role !== 'staff' && (
+                          {userData.role !== 'staff' && !isDefaultAdmin(userData) && (
                             <button
-                              onClick={() => handleUpdateUserRole(userData._id, 'staff', userData.name)}
-                              className="text-xs text-blue-600 hover:text-blue-900 transition-colors"
+                              onClick={() => handleUpdateUserRole(userData._id, 'staff', userData.name, userData)}
+                              className="px-3 py-2 text-sm bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                              disabled={userData._id === user.id}
+                              title={userData._id === user.id ? 'Cannot change your own role' : 'Make Staff'}
                             >
-                              Make Staff
+                              Staff
                             </button>
                           )}
-                          {userData.role !== 'user' && (
+                          {userData.role !== 'user' && !isDefaultAdmin(userData) && (
                             <button
-                              onClick={() => handleUpdateUserRole(userData._id, 'user', userData.name)}
-                              className="text-xs text-green-600 hover:text-green-900 transition-colors"
+                              onClick={() => handleUpdateUserRole(userData._id, 'user', userData.name, userData)}
+                              className="px-3 py-2 text-sm bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                              disabled={userData._id === user.id}
+                              title={userData._id === user.id ? 'Cannot change your own role' : 'Make User'}
                             >
-                              Make User
+                              User
                             </button>
                           )}
                         </div>
                         
                         {/* Delete Button */}
-                        <button
-                          onClick={() => handleDeleteUser(userData._id, userData.name)}
-                          className="text-xs text-red-600 hover:text-red-900 transition-colors text-left"
-                          disabled={userData._id === user.id}
-                        >
-                          {userData._id === user.id ? 'Cannot delete self' : 'Delete User'}
-                        </button>
+                        {!isDefaultAdmin(userData) && (
+                          <button
+                            onClick={() => handleDeleteUser(userData._id, userData.name)}
+                            className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={userData._id === user.id}
+                            title={userData._id === user.id ? 'Cannot delete your own account' : 'Delete User'}
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -439,9 +553,9 @@ const UserManagement = () => {
             </p>
             {(userFilters.role !== 'all' || userFilters.search) && (
               <button
-                onClick={() => {
+                onClick={(e) => {
+                  e.preventDefault();
                   setUserFilters({ role: 'all', search: '' });
-                  fetchUsers();
                 }}
                 className="text-blue-600 hover:text-blue-800 mr-4"
               >

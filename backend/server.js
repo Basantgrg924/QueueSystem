@@ -6,6 +6,7 @@ const { Server } = require('socket.io');
 const connectDB = require('./config/db');
 const queueRoutes = require('./routes/queueRoutes');
 const tokenRoutes = require('./routes/tokenRoutes');
+const initializeDefaultAdmin = require('./utils/initializeAdmin');
 
 dotenv.config();
 const app = express();
@@ -65,7 +66,11 @@ io.on('connection', (socket) => {
 });
 
 if (require.main === module) {
-  connectDB();
+  connectDB().then(() => {
+    // Initialize default admin account after database connection
+    initializeDefaultAdmin();
+  });
+  
   const PORT = process.env.PORT || 5001;
   server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 }

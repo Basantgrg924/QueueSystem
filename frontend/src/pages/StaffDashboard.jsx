@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 
 const StaffDashboard = () => {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { socket, isConnected, joinQueueRoom, leaveQueueRoom } = useSocket();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [queues, setQueues] = useState([]);
@@ -249,32 +249,6 @@ const StaffDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Navigation */}
-      <nav className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-blue-600">QueueMS Staff</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              {/* Real-time connection status */}
-              <div className="flex items-center space-x-2">
-                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                <span className="text-xs text-gray-600">
-                  {isConnected ? 'Live Updates' : 'Offline'}
-                </span>
-              </div>
-              <span className="text-gray-700">Staff: {user?.name}</span>
-              <button
-                onClick={logout}
-                className="text-gray-500 hover:text-red-600 transition-colors"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
 
       <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         {/* Queue Selection */}

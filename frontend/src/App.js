@@ -6,6 +6,7 @@ import Login from './pages/Login';
 import Profile from './pages/Profile';
 import Register from './pages/Register';
 import RoleBasedDashboard from './pages/RoleBasedDashboard';
+import Navbar from './components/Navbar';
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -32,6 +33,7 @@ function App() {
     <AuthProvider>
       <SocketProvider>
         <Router>
+          <Navbar />
           <Routes>
             <Route path="/login" element={
               <PublicRoute>
