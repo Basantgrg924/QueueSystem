@@ -23,17 +23,26 @@ const QueueManagement = () => {
 
     const fetchQueues = async () => {
         try {
-            // Use the main queues endpoint with admin authentication
-            // This will show all queues for admins, only active for others
-            const response = await axiosInstance.get('/api/queues', {
+            // Use admin endpoint to get both active and inactive queues
+            const response = await axiosInstance.get('/api/queues/admin/manage', {
                 headers: { Authorization: `Bearer ${user.token}` }
             });
-            console.log('Queue fetch response:', response.data);
+            console.log('Admin queue management fetch response:', response.data);
             setQueues(response.data.queues || []);
         } catch (error) {
-            console.error('Failed to fetch queues:', error);
+            console.error('Failed to fetch admin queues:', error);
             console.error('Error details:', error.response?.data);
-            setQueues([]);
+            
+            // Fallback to public endpoint
+            try {
+                console.log('Falling back to public endpoint...');
+                const fallbackResponse = await axiosInstance.get('/api/queues');
+                console.log('Fallback response:', fallbackResponse.data);
+                setQueues(fallbackResponse.data.queues || []);
+            } catch (fallbackError) {
+                console.error('Fallback also failed:', fallbackError);
+                setQueues([]);
+            }
         } finally {
             setPageLoading(false);
         }
