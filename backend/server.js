@@ -36,7 +36,7 @@ app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/queues', queueRoutes);
 app.use('/api/tokens', tokenRoutes);
 app.use('/api/admin', require('./routes/adminRoutes'));
-// app.use('/api/audit', require('./routes/auditRoutes'));
+app.use('/api/audit', require('./routes/auditRoutes'));
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {

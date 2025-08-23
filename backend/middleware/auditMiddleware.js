@@ -15,7 +15,6 @@ const auditMiddleware = (action, targetType = null) => {
             const logEntry = {
                 action,
                 userId: req.user?.id,
-                targetType,
                 description: generateDescription(action, req, data),
                 ipAddress: req.ip || req.connection.remoteAddress,
                 userAgent: req.get('User-Agent'),
@@ -29,7 +28,12 @@ const auditMiddleware = (action, targetType = null) => {
                 }
             };
             
-            // Add target ID if available
+            // Only add targetType if it's provided and not null
+            if (targetType) {
+                logEntry.targetType = targetType;
+            }
+            
+            // Add target ID if available and targetType is specified
             if (req.params.id && targetType) {
                 logEntry.targetId = req.params.id;
             }
@@ -92,12 +96,35 @@ const generateDescription = (action, req, responseData) => {
             return `${userName} logged in`;
         case 'USER_LOGOUT':
             return `${userName} logged out`;
+        case 'USER_PROFILE_UPDATED':
+            return `${userName} updated their profile`;
+        case 'USER_PASSWORD_CHANGED':
+            return `${userName} changed their password`;
+            
+        // Staff actions
+        case 'STAFF_LOGIN':
+            return `Staff ${userName} logged in`;
+        case 'STAFF_TOKEN_CALLED':
+            return `Staff ${userName} called token "${responseData?.token?.tokenNumber || 'Unknown'}"`;
+        case 'STAFF_TOKEN_STATUS_CHANGED':
+            const staffNewStatus = req.body?.status || 'unknown';
+            return `Staff ${userName} changed token status to "${staffNewStatus}"`;
             
         // Admin actions
         case 'ADMIN_LOGIN':
             return `Administrator ${userName} logged in`;
         case 'ADMIN_SETTINGS_CHANGED':
             return `${userName} changed system settings`;
+        case 'ADMIN_USER_ROLE_CHANGED':
+            const targetUserName = req.body?.userName || 'Unknown User';
+            const adminNewRole = req.body?.role || 'unknown';
+            return `${userName} changed ${targetUserName}'s role to "${adminNewRole}"`;
+        case 'ADMIN_USER_DELETED':
+            const deletedUserName = req.body?.userName || 'Unknown User';
+            return `${userName} deleted user "${deletedUserName}"`;
+        case 'ADMIN_AUDIT_CLEANED':
+            const retentionDays = req.body?.retentionDays || 'unknown';
+            return `${userName} cleaned audit logs older than ${retentionDays} days`;
             
         default:
             return `${userName} performed ${action.toLowerCase().replace('_', ' ')}`;

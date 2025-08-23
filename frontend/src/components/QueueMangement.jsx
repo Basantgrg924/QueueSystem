@@ -23,10 +23,17 @@ const QueueManagement = () => {
 
     const fetchQueues = async () => {
         try {
-            const response = await axiosInstance.get('/api/queues');
+            // Use the main queues endpoint with admin authentication
+            // This will show all queues for admins, only active for others
+            const response = await axiosInstance.get('/api/queues', {
+                headers: { Authorization: `Bearer ${user.token}` }
+            });
+            console.log('Queue fetch response:', response.data);
             setQueues(response.data.queues || []);
         } catch (error) {
             console.error('Failed to fetch queues:', error);
+            console.error('Error details:', error.response?.data);
+            setQueues([]);
         } finally {
             setPageLoading(false);
         }
@@ -266,18 +273,12 @@ const QueueManagement = () => {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="flex items-center">
-                                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${queue.isActive
+                                                <span className={`px-3 py-2 rounded-full text-sm font-semibold ${queue.isActive
                                                     ? 'bg-green-100 text-green-800'
-                                                    : 'bg-red-100 text-red-800'
+                                                    : 'bg-gray-100 text-gray-800'
                                                     }`}>
-                                                    {queue.isActive ? 'Active' : 'Inactive'}
+                                                    {queue.isActive ? 'Active' : 'Deactivated'}
                                                 </span>
-                                                <button
-                                                    onClick={() => handleToggleQueueStatus(queue._id, queue.isActive)}
-                                                    className="ml-2 text-xs text-blue-600 hover:text-blue-800"
-                                                >
-                                                    {queue.isActive ? 'Deactivate' : 'Activate'}
-                                                </button>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
@@ -299,18 +300,34 @@ const QueueManagement = () => {
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                             {formatDateTime(queue.createdAt)}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                            <div className="flex space-x-2">
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="flex items-center space-x-2">
+                                                {/* Edit Button */}
                                                 <button
                                                     onClick={() => handleEditQueue(queue)}
-                                                    className="text-blue-600 hover:text-blue-900 transition-colors"
+                                                    className="px-3 py-2 text-sm bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors font-medium"
                                                 >
                                                     Edit
                                                 </button>
+                                                
+                                                {/* Toggle Status Button */}
+                                                <button
+                                                    onClick={() => handleToggleQueueStatus(queue._id, queue.isActive)}
+                                                    className={`px-3 py-2 text-sm rounded-lg transition-colors font-medium ${
+                                                        queue.isActive 
+                                                            ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' 
+                                                            : 'bg-green-100 text-green-700 hover:bg-green-200'
+                                                    }`}
+                                                >
+                                                    {queue.isActive ? 'Deactivate' : 'Activate'}
+                                                </button>
+                                                
+                                                {/* Delete Button */}
                                                 <button
                                                     onClick={() => handleDeleteQueue(queue._id, queue.name)}
-                                                    className="text-red-600 hover:text-red-900 transition-colors"
+                                                    className="px-3 py-2 text-sm bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                                                     disabled={queue.currentCount > 0}
+                                                    title={queue.currentCount > 0 ? `Cannot delete: ${queue.currentCount} active tokens` : 'Delete Queue'}
                                                 >
                                                     Delete
                                                 </button>
