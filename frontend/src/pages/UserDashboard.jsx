@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { 
     FaBuilding, 
     FaTicketAlt, 
@@ -23,7 +23,6 @@ const UserDashboard = () => {
     const [activeTokens, setActiveTokens] = useState([]);
     const [loading, setLoading] = useState(false);
     const [pageLoading, setPageLoading] = useState(true);
-    const [refreshInterval, setRefreshInterval] = useState(null);
 
     // Profile state
     const [profileData, setProfileData] = useState({
@@ -34,6 +33,70 @@ const UserDashboard = () => {
     });
     const [profileLoading, setProfileLoading] = useState(false);
 
+    const fetchQueues = useCallback(async () => {
+        try {
+            const response = await axiosInstance.get('/api/queues');
+            setQueues(response.data.queues || []);
+        } catch (error) {
+            console.error('Failed to fetch queues:', error);
+        }
+    }, []);
+
+    const fetchTokens = useCallback(async () => {
+        if (!user?.token) return;
+
+        try {
+            const response = await axiosInstance.get('/api/tokens/my-tokens', {
+                headers: { Authorization: `Bearer ${user.token}` }
+            });
+
+            const tokens = response.data.tokens || [];
+
+            // Filter only active tokens and ensure we have queueId for Socket rooms
+            const active = tokens.filter(token =>
+                ['waiting', 'called', 'serving'].includes(token.status)
+            ).map(token => ({
+                ...token,
+                queueId: token.queueId || token.queue?._id // Ensure queueId is available
+            }));
+
+            setActiveTokens(active);
+        } catch (error) {
+            console.error('Failed to fetch tokens:', error);
+        }
+    }, [user?.token]);
+
+    const fetchProfile = useCallback(async () => {
+        if (!user?.token) return;
+
+        try {
+            const response = await axiosInstance.get('/api/auth/profile', {
+                headers: { Authorization: `Bearer ${user.token}` }
+            });
+            setProfileData({
+                name: response.data.name || '',
+                email: response.data.email || '',
+                university: response.data.university || '',
+                address: response.data.address || ''
+            });
+        } catch (error) {
+            console.error('Failed to fetch profile:', error);
+        }
+    }, [user?.token]);
+
+    const fetchInitialData = useCallback(async () => {
+        setPageLoading(true);
+        try {
+            await Promise.all([
+                fetchQueues(),
+                fetchTokens(),
+                fetchProfile()
+            ]);
+        } finally {
+            setPageLoading(false);
+        }
+    }, [fetchQueues, fetchTokens, fetchProfile]);
+
     useEffect(() => {
         fetchInitialData();
 
@@ -42,12 +105,11 @@ const UserDashboard = () => {
                 fetchTokens();
             }
         }, 30000);
-        setRefreshInterval(interval);
 
         return () => {
             if (interval) clearInterval(interval);
         };
-    }, [activeTab]);
+    }, [fetchInitialData, activeTab, fetchTokens]);
 
     // Socket.IO event listeners for real-time updates
     useEffect(() => {
@@ -80,7 +142,7 @@ const UserDashboard = () => {
                 socket.off('token-called');
             };
         }
-    }, [socket, isConnected]);
+    }, [socket, isConnected, fetchTokens, fetchQueues]);
 
     // Join queue rooms for tokens user has
     useEffect(() => {
@@ -113,70 +175,6 @@ const UserDashboard = () => {
             </div>
         );
     }
-
-    const fetchInitialData = async () => {
-        setPageLoading(true);
-        try {
-            await Promise.all([
-                fetchQueues(),
-                fetchTokens(),
-                fetchProfile()
-            ]);
-        } finally {
-            setPageLoading(false);
-        }
-    };
-
-    const fetchQueues = async () => {
-        try {
-            const response = await axiosInstance.get('/api/queues');
-            setQueues(response.data.queues || []);
-        } catch (error) {
-            console.error('Failed to fetch queues:', error);
-        }
-    };
-
-    const fetchTokens = async () => {
-        if (!user?.token) return;
-
-        try {
-            const response = await axiosInstance.get('/api/tokens/my-tokens', {
-                headers: { Authorization: `Bearer ${user.token}` }
-            });
-
-            const tokens = response.data.tokens || [];
-
-            // Filter only active tokens and ensure we have queueId for Socket rooms
-            const active = tokens.filter(token =>
-                ['waiting', 'called', 'serving'].includes(token.status)
-            ).map(token => ({
-                ...token,
-                queueId: token.queueId || token.queue?._id // Ensure queueId is available
-            }));
-
-            setActiveTokens(active);
-        } catch (error) {
-            console.error('Failed to fetch tokens:', error);
-        }
-    };
-
-    const fetchProfile = async () => {
-        if (!user?.token) return;
-
-        try {
-            const response = await axiosInstance.get('/api/auth/profile', {
-                headers: { Authorization: `Bearer ${user.token}` }
-            });
-            setProfileData({
-                name: response.data.name || '',
-                email: response.data.email || '',
-                university: response.data.university || '',
-                address: response.data.address || ''
-            });
-        } catch (error) {
-            console.error('Failed to fetch profile:', error);
-        }
-    };
 
     const handleJoinQueue = async (queueId) => {
         if (!user?.token) return;

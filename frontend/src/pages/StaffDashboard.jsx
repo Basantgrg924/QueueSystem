@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import axiosInstance from '../axiosConfig';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -22,7 +22,6 @@ const StaffDashboard = () => {
   const [activityLogs, setActivityLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
-  const [refreshInterval, setRefreshInterval] = useState(null);
 
   // Filters for activity logs
   const [logFilters, setLogFilters] = useState({
@@ -30,76 +29,16 @@ const StaffDashboard = () => {
     status: 'all'
   });
 
-  useEffect(() => {
-    fetchInitialData();
-
-    // Auto-refresh every 15 seconds
-    const interval = setInterval(() => {
-      if (selectedQueue) {
-        fetchQueueDetails(selectedQueue);
-        fetchActivityLogs();
-      }
-    }, 15000);
-    setRefreshInterval(interval);
-
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [selectedQueue, logFilters]);
-
-  // Socket.IO event listeners for real-time updates
-  useEffect(() => {
-    if (socket && isConnected) {
-      // Listen for queue updates
-      socket.on('queue-updated', (data) => {
-        console.log('Queue updated:', data);
-        // Refresh queue data if it matches the selected queue
-        if (selectedQueue && data.queueId === selectedQueue) {
-          fetchQueueDetails(selectedQueue);
-          fetchActivityLogs();
-        }
-        fetchQueues(); // Always refresh queue list for updated counts
-      });
-
-      return () => {
-        socket.off('queue-updated');
-      };
-    }
-  }, [socket, isConnected, selectedQueue]);
-
-  // Join selected queue room for real-time updates
-  useEffect(() => {
-    if (selectedQueue && socket && isConnected) {
-      joinQueueRoom(selectedQueue);
-      
-      return () => {
-        leaveQueueRoom(selectedQueue);
-      };
-    }
-  }, [selectedQueue, socket, isConnected, joinQueueRoom, leaveQueueRoom]);
-
-  const fetchInitialData = async () => {
-    setPageLoading(true);
-    try {
-      await Promise.all([
-        fetchQueues(),
-        fetchActivityLogs()
-      ]);
-    } finally {
-      setPageLoading(false);
-    }
-  };
-
-  const fetchQueues = async () => {
+  const fetchQueues = useCallback(async () => {
     try {
       const response = await axiosInstance.get('/api/queues');
       setQueues(response.data.queues || []);
     } catch (error) {
       console.error('Failed to fetch queues:', error);
     }
-  };
+  }, []);
 
-  const fetchQueueDetails = async (queueId) => {
+  const fetchQueueDetails = useCallback(async (queueId) => {
     try {
       const response = await axiosInstance.get(`/api/queues/${queueId}`, {
         headers: { Authorization: `Bearer ${user.token}` }
@@ -136,9 +75,9 @@ const StaffDashboard = () => {
     } catch (error) {
       console.error('Failed to fetch queue details:', error);
     }
-  };
+  }, [user.token]);
 
-  const fetchActivityLogs = async () => {
+  const fetchActivityLogs = useCallback(async () => {
     if (!selectedQueue) return;
 
     try {
@@ -154,7 +93,66 @@ const StaffDashboard = () => {
     } catch (error) {
       console.error('Failed to fetch activity logs:', error);
     }
-  };
+  }, [selectedQueue, user.token, logFilters.date, logFilters.status]);
+
+  const fetchInitialData = useCallback(async () => {
+    setPageLoading(true);
+    try {
+      await Promise.all([
+        fetchQueues(),
+        fetchActivityLogs()
+      ]);
+    } finally {
+      setPageLoading(false);
+    }
+  }, [fetchQueues, fetchActivityLogs]);
+
+  useEffect(() => {
+    fetchInitialData();
+
+    // Auto-refresh every 15 seconds
+    const interval = setInterval(() => {
+      if (selectedQueue) {
+        fetchQueueDetails(selectedQueue);
+        fetchActivityLogs();
+      }
+    }, 15000);
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [fetchInitialData, selectedQueue, fetchQueueDetails, fetchActivityLogs]);
+
+  // Socket.IO event listeners for real-time updates
+  useEffect(() => {
+    if (socket && isConnected) {
+      // Listen for queue updates
+      socket.on('queue-updated', (data) => {
+        console.log('Queue updated:', data);
+        // Refresh queue data if it matches the selected queue
+        if (selectedQueue && data.queueId === selectedQueue) {
+          fetchQueueDetails(selectedQueue);
+          fetchActivityLogs();
+        }
+        fetchQueues(); // Always refresh queue list for updated counts
+      });
+
+      return () => {
+        socket.off('queue-updated');
+      };
+    }
+  }, [socket, isConnected, selectedQueue, fetchQueueDetails, fetchActivityLogs, fetchQueues]);
+
+  // Join selected queue room for real-time updates
+  useEffect(() => {
+    if (selectedQueue && socket && isConnected) {
+      joinQueueRoom(selectedQueue);
+      
+      return () => {
+        leaveQueueRoom(selectedQueue);
+      };
+    }
+  }, [selectedQueue, socket, isConnected, joinQueueRoom, leaveQueueRoom]);
 
   const handleQueueSelect = (queueId) => {
     setSelectedQueue(queueId);

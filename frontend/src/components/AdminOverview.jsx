@@ -1,5 +1,5 @@
 import { Activity, Building, RefreshCw, TrendingUp, Users } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import axiosInstance from '../axiosConfig';
 import { useAuth } from '../context/AuthContext';
 
@@ -13,18 +13,7 @@ const AdminOverview = () => {
     const [loading, setLoading] = useState(true);
     const [lastUpdated, setLastUpdated] = useState(new Date());
 
-    useEffect(() => {
-        fetchSystemStats();
-
-        // Auto-refresh every 30 seconds
-        const interval = setInterval(() => {
-            fetchSystemStats();
-        }, 30000);
-
-        return () => clearInterval(interval);
-    }, []);
-
-    const fetchSystemStats = async () => {
+    const fetchSystemStats = useCallback(async () => {
         try {
             const response = await axiosInstance.get('/api/admin/stats', {
                 headers: { Authorization: `Bearer ${user.token}` }
@@ -42,7 +31,18 @@ const AdminOverview = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [user.token]);
+
+    useEffect(() => {
+        fetchSystemStats();
+
+        // Auto-refresh every 30 seconds
+        const interval = setInterval(() => {
+            fetchSystemStats();
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [fetchSystemStats]);
 
     const handleRefresh = () => {
         setLoading(true);
