@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import axiosInstance from '../axiosConfig';
+import { Mail } from 'lucide-react';
 
 const Login = () => {
   const [formData, setFormData] = useState({ email: '', password: '' });
@@ -99,9 +100,9 @@ const Login = () => {
         {process.env.NODE_ENV === 'development' && (
           <div className="mt-4 p-3 bg-gray-100 rounded text-xs">
             <p className="font-semibold mb-2">Test Accounts:</p>
-            <p>📧 stafftest@gmail.com (Staff)</p>
-            <p>📧 admin@example.com (Admin)</p>
-            <p>📧 user@example.com (User)</p>
+            <p><Mail className="w-4 h-4 inline mr-2" />stafftest@gmail.com (Staff)</p>
+            <p><Mail className="w-4 h-4 inline mr-2" />admin@example.com (Admin)</p>
+            <p><Mail className="w-4 h-4 inline mr-2" />user@example.com (User)</p>
           </div>
         )}
       </form>
