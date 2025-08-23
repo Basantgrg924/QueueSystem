@@ -197,7 +197,6 @@ const AuditLog = () => {
             <div className="flex justify-between items-center mb-6">
                 <div>
                     <h2 className="text-2xl font-bold text-gray-900 flex items-center">
-                        <Shield className="w-6 h-6 mr-2" />
                         Audit Log
                     </h2>
                     <p className="text-gray-600 mt-1">Monitor all system activities and user actions</p>
@@ -205,7 +204,7 @@ const AuditLog = () => {
                 <div className="flex space-x-3">
                     <button
                         onClick={() => setShowFilters(!showFilters)}
-                        className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                        className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm"
                     >
                         <Filter className="w-4 h-4" />
                         <span>Filters</span>
@@ -214,7 +213,7 @@ const AuditLog = () => {
                     <button
                         onClick={fetchAuditLogs}
                         disabled={loading}
-                        className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                        className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-semibold text-sm shadow-sm"
                     >
                         <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                         <span>Refresh</span>

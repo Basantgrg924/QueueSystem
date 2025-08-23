@@ -71,7 +71,7 @@ const AdminOverview = () => {
                     <button
                         onClick={handleRefresh}
                         disabled={loading}
-                        className="flex items-center px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                        className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-semibold text-sm shadow-sm"
                     >
                         <RefreshCw className={`w-4 h-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
                         {loading ? 'Refreshing...' : 'Refresh'}

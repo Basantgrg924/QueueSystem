@@ -194,7 +194,7 @@ const TokenHistory = () => {
                     <div>
                         <button
                             onClick={clearFilters}
-                            className="w-full px-4 py-2 text-sm bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+                            className="w-full px-4 py-3 text-sm bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
                         >
                             Clear Filters
                         </button>
