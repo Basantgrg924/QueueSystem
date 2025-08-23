@@ -2,7 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { LogOut, User, ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useSocket } from '../context/SocketContext';
+// import { useSocket } from '../context/SocketContext';
 
 const Navbar = () => {
   // Call all hooks at the top level
@@ -10,15 +10,15 @@ const Navbar = () => {
   const navigate = useNavigate();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   
-  // Socket context with error handling
-  let isConnected = false;
-  try {
-    const socketContext = useSocket();
-    isConnected = socketContext?.isConnected || false;
-  } catch (error) {
-    // Socket context not available - this is okay for non-real-time features
-    isConnected = false;
-  }
+  // Socket context with error handling (keeping for future use)
+  // let isConnected = false;
+  // try {
+  //   const socketContext = useSocket();
+  //   isConnected = socketContext?.isConnected || false;
+  // } catch (error) {
+  //   // Socket context not available - this is okay for non-real-time features
+  //   isConnected = false;
+  // }
 
   const handleLogout = () => {
     logout();

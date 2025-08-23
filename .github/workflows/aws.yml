@@ -131,7 +131,9 @@ jobs:
     - name: Build Frontend Docker Image
       run: |
         cd frontend
-        docker build -t ${{ env.FRONTEND_IMAGE_NAME }}:${{ github.sha }} .
+        docker build \
+          --build-arg REACT_APP_BACKEND_URL=http://${{ secrets.EC2_HOST }}:5001 \
+          -t ${{ env.FRONTEND_IMAGE_NAME }}:${{ github.sha }} .
         docker tag ${{ env.FRONTEND_IMAGE_NAME }}:${{ github.sha }} ${{ env.FRONTEND_IMAGE_NAME }}:latest
     
     - name: Build Backend Docker Image
@@ -215,6 +217,9 @@ jobs:
           MONGODB_URI=mongodb://127.0.0.1:27017/sdlapps
           JWT_SECRET=${{ secrets.JWT_SECRET }}
           FRONTEND_URL=http://${{ secrets.EC2_HOST }}
+          DEFAULT_ADMIN_EMAIL=admin@queuems.com
+          DEFAULT_ADMIN_PASSWORD=${{ secrets.DEFAULT_ADMIN_PASSWORD }}
+          DEFAULT_ADMIN_NAME=System Administrator
           EOF
           
           # Debug MongoDB connection
