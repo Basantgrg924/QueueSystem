@@ -217,9 +217,9 @@ jobs:
           MONGODB_URI=mongodb://127.0.0.1:27017/sdlapps
           JWT_SECRET=${{ secrets.JWT_SECRET }}
           FRONTEND_URL=http://${{ secrets.EC2_HOST }}
-          DEFAULT_ADMIN_EMAIL=admin@queuems.com
+          DEFAULT_ADMIN_EMAIL=${{ secrets.DEFAULT_ADMIN_EMAIL }}
           DEFAULT_ADMIN_PASSWORD=${{ secrets.DEFAULT_ADMIN_PASSWORD }}
-          DEFAULT_ADMIN_NAME=System Administrator
+          DEFAULT_ADMIN_NAME=${{ secrets.DEFAULT_ADMIN_NAME }}
           EOF
           
           # Debug MongoDB connection

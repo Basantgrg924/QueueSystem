@@ -12,13 +12,15 @@ const { auditMiddleware } = require('../middleware/auditMiddleware');
 
 const router = express.Router();
 
-// Public routes
-router.get('/', getAllQueues);
+// Public routes (no authentication needed)
 router.get('/:id', getQueueById);
 router.get('/:queueId/position', getQueuePosition);
 
 // Protected routes (require authentication)
 router.use(protect);
+
+// Routes that check user role internally
+router.get('/', getAllQueues);
 
 // Admin only routes
 router.post('/', adminOnly, auditMiddleware('QUEUE_CREATED', 'Queue'), createQueue);

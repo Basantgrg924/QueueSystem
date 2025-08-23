@@ -25,16 +25,27 @@ const auditLogSchema = new mongoose.Schema({
             'USER_ROLE_CHANGED',
             'USER_LOGIN',
             'USER_LOGOUT',
+            'USER_PROFILE_UPDATED',
+            'USER_PASSWORD_CHANGED',
+            
+            // Staff actions
+            'STAFF_LOGIN',
+            'STAFF_TOKEN_CALLED',
+            'STAFF_TOKEN_STATUS_CHANGED',
             
             // Admin actions
             'ADMIN_LOGIN',
             'ADMIN_SETTINGS_CHANGED',
+            'ADMIN_USER_ROLE_CHANGED',
+            'ADMIN_USER_DELETED',
+            'ADMIN_AUDIT_CLEANED',
             
             // System actions
             'SYSTEM_BACKUP',
             'SYSTEM_RESTORE',
             'DATA_EXPORT',
-            'DATA_IMPORT'
+            'DATA_IMPORT',
+            'SYSTEM_ERROR'
         ]
     },
     
@@ -49,7 +60,8 @@ const auditLogSchema = new mongoose.Schema({
     targetType: {
         type: String,
         enum: ['Queue', 'Token', 'User', 'System'],
-        required: false
+        required: false,
+        default: undefined
     },
     
     targetId: {

@@ -194,7 +194,7 @@ const AdminProfile = () => {
                 <h4 className="font-medium text-gray-900">Password</h4>
                 <button
                   onClick={() => setShowPasswordForm(!showPasswordForm)}
-                  className="text-sm text-blue-600 hover:text-blue-800 transition-colors"
+                  className="px-3 py-2 text-sm bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors font-medium"
                 >
                   {showPasswordForm ? 'Cancel' : 'Change Password'}
                 </button>

@@ -51,16 +51,37 @@ const createQueue = async (req, res) => {
 // Get all queues
 const getAllQueues = async (req, res) => {
     try {
-        const queues = await Queue.find({ isActive: true })
+        // Check if user is authenticated and is admin to show all queues
+        const showAll = req.user && req.user.role === 'admin';
+        
+        const query = showAll ? {} : { isActive: true };
+        console.log('getAllQueues - showAll:', showAll, 'query:', query);
+        
+        const queues = await Queue.find(query)
             .populate('createdBy', 'name email')
             .sort({ createdAt: -1 });
 
+        // Add current active count to each queue
+        const queuesWithCount = await Promise.all(queues.map(async (queue) => {
+            const activeCount = await Token.countDocuments({
+                queueId: queue._id,
+                status: { $in: ['waiting', 'called', 'serving'] }
+            });
+            
+            const queueObj = queue.toObject();
+            queueObj.currentCount = activeCount;
+            return queueObj;
+        }));
+
+        console.log(`Returning ${queuesWithCount.length} queues`);
+
         res.status(200).json({
             success: true,
-            count: queues.length,
-            queues
+            count: queuesWithCount.length,
+            queues: queuesWithCount
         });
     } catch (error) {
+        console.error('Error in getAllQueues:', error);
         res.status(500).json({
             success: false,
             message: 'Error fetching queues',

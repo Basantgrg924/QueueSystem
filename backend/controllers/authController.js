@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
+const { logAction } = require('../middleware/auditMiddleware');
 
 const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '30d' });
@@ -34,6 +35,27 @@ const loginUser = async (req, res) => {
     try {
         const user = await User.findOne({ email });
         if (user && (await bcrypt.compare(password, user.password))) {
+            // Determine login action based on user role
+            let loginAction = 'USER_LOGIN';
+            if (user.role === 'admin') {
+                loginAction = 'ADMIN_LOGIN';
+            } else if (user.role === 'staff') {
+                loginAction = 'STAFF_LOGIN';
+            }
+            
+            // Log the login action
+            await logAction(
+                loginAction, 
+                user.id, 
+                `${user.name} logged in successfully`,
+                {
+                    email: user.email,
+                    role: user.role,
+                    ipAddress: req.ip || req.connection.remoteAddress,
+                    userAgent: req.get('User-Agent')
+                }
+            );
+            
             res.json({
                 id: user.id,
                 name: user.name,
