@@ -6,7 +6,7 @@ const {
     updateQueue,
     deleteQueue,
     getQueuePosition
-} = require('../controllers/queueController');
+} = require('../controllers/QueueController');
 const { protect, adminOnly } = require('../middleware/authMiddleware');
 const { auditMiddleware } = require('../middleware/auditMiddleware');
 
