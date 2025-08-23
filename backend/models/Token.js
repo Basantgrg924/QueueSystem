@@ -16,10 +16,7 @@ const tokenSchema = new mongoose.Schema({
         ref: 'User',
         required: true
     },
-    position: {
-        type: Number,
-        required: true
-    },
+
     status: {
         type: String,
         enum: ['waiting', 'called', 'serving', 'completed', 'cancelled', 'no-show'],
