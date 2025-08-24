@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import axiosInstance from '../axiosConfig';
 import { useAuth } from '../context/AuthContext';
 import { Building2 } from 'lucide-react';
@@ -17,11 +17,7 @@ const QueueManagement = () => {
         avgServiceTime: 10
     });
 
-    useEffect(() => {
-        fetchQueues();
-    }, []);
-
-    const fetchQueues = async () => {
+    const fetchQueues = useCallback(async () => {
         try {
             // Use admin endpoint to get both active and inactive queues
             const response = await axiosInstance.get('/api/queues/admin/manage', {
@@ -46,7 +42,11 @@ const QueueManagement = () => {
         } finally {
             setPageLoading(false);
         }
-    };
+    }, [user.token]);
+
+    useEffect(() => {
+        fetchQueues();
+    }, [fetchQueues]);
 
     const handleCreateQueue = async (e) => {
         e.preventDefault();
