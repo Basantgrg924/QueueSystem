@@ -46,20 +46,6 @@ jobs:
       run:
         working-directory: ./backend
     
-    services:
-      mongodb:
-        image: mongo:7.0
-        env:
-          MONGO_INITDB_ROOT_USERNAME: root
-          MONGO_INITDB_ROOT_PASSWORD: password
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --eval 'db.adminCommand({ping: 1})'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -77,11 +63,17 @@ jobs:
     - name: Run linting
       run: npm run lint
     
+    - name: Ensure MongoDB is running
+      run: |
+        sudo systemctl start mongod
+        sudo systemctl enable mongod
+        timeout 30 bash -c 'until mongosh --eval "db.adminCommand({ping: 1})" >/dev/null 2>&1; do sleep 2; done'
+    
     - name: Run tests
       run: npm test
       continue-on-error: true
       env:
-        MONGODB_URI: mongodb://root:password@localhost:27017/test?authSource=admin
+        MONGODB_URI: mongodb://localhost:27017/test
         NODE_ENV: test
         JWT_SECRET: test-secret
 
