@@ -336,4 +336,4 @@ jobs:
           echo "Deployed: $(date)"
           echo "Frontend: http://${{ secrets.EC2_HOST }}"
           echo "Backend: http://${{ secrets.EC2_HOST }}:5001/api/health"
-          pm2 list --no-colors
+          pm2 list
