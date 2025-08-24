@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import axiosInstance from '../axiosConfig';
 
@@ -19,11 +19,7 @@ const AdminProfile = () => {
   });
   const [showPasswordForm, setShowPasswordForm] = useState(false);
 
-  useEffect(() => {
-    fetchProfile();
-  }, []);
-
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     try {
       const response = await axiosInstance.get('/api/auth/profile', {
         headers: { Authorization: `Bearer ${user.token}` }
@@ -46,7 +42,11 @@ const AdminProfile = () => {
     } finally {
       setPageLoading(false);
     }
-  };
+  }, [user.token, user?.name, user?.email]);
+
+  useEffect(() => {
+    fetchProfile();
+  }, [fetchProfile]);
 
   const handleUpdateProfile = async () => {
     setLoading(true);
