@@ -1,29 +1,22 @@
 name: CI/CD Pipeline - Deploy to EC2
 
 on:
-  # Trigger on pushes to main (including merged PRs)
   push:
     branches: [ main ]
-  
-  # Trigger on pull requests to main (for testing only)
   pull_request:
     branches: [ main ]
     types: [ opened, synchronize, reopened ]
 
 env:
-  FRONTEND_IMAGE_NAME: frontend-app
-  BACKEND_IMAGE_NAME: backend-api
   NODE_VERSION: '18'
 
 jobs:
-  # Frontend Tests
   frontend-tests:
     name: "Frontend Tests & Linting"
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: ./frontend
-    continue-on-error: false  # Tests should pass for production deployment
     
     steps:
     - name: Checkout code
@@ -40,10 +33,10 @@ jobs:
       run: npm ci
     
     - name: Run linting
-      run: npm run lint || echo "Linting step completed"
+      run: npm run lint
     
     - name: Run tests
-      run: npm test -- --coverage --watchAll=false || echo "Tests failed, but continuing pipeline"
+      run: npm test -- --coverage --watchAll=false
       continue-on-error: true
     
     - name: Upload test results
@@ -56,14 +49,12 @@ jobs:
           frontend/test-results/
       continue-on-error: true
 
-  # Backend Tests
   backend-tests:
     name: "Backend Tests & Linting"
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: ./backend
-    continue-on-error: false  # Tests should pass for production deployment
     
     services:
       mongodb:
@@ -94,10 +85,10 @@ jobs:
       run: npm ci
     
     - name: Run linting
-      run: npm run lint || echo "Linting step completed"
+      run: npm run lint
     
     - name: Run tests
-      run: npm test || echo "Tests failed, but continuing pipeline"
+      run: npm test
       continue-on-error: true
       env:
         MONGODB_URI: mongodb://root:password@localhost:27017/test?authSource=admin
@@ -114,8 +105,7 @@ jobs:
           backend/test-results/
       continue-on-error: true
 
-  # Build Docker Images (only on merged PRs to main)
-  build-images:
+  build-applications:
     name: "Build & Package Applications"
     needs: [frontend-tests, backend-tests]
     runs-on: ubuntu-latest
@@ -125,60 +115,65 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
     
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+    - name: Setup Node.js for Frontend Build
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
     
-    - name: Build Frontend Docker Image
+    - name: Build Frontend Application
       run: |
         cd frontend
-        docker build \
-          --build-arg REACT_APP_BACKEND_URL=http://${{ secrets.EC2_HOST }}:5001 \
-          -t ${{ env.FRONTEND_IMAGE_NAME }}:${{ github.sha }} .
-        docker tag ${{ env.FRONTEND_IMAGE_NAME }}:${{ github.sha }} ${{ env.FRONTEND_IMAGE_NAME }}:latest
+        npm ci
+        REACT_APP_BACKEND_URL=http://${{ secrets.EC2_HOST }}:5001 npm run build
+        tar -czf ../frontend-build.tar.gz -C build .
     
-    - name: Build Backend Docker Image
+    - name: Setup Node.js for Backend Build
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: backend/package-lock.json
+    
+    - name: Package Backend Application
       run: |
         cd backend
-        docker build -t ${{ env.BACKEND_IMAGE_NAME }}:${{ github.sha }} .
-        docker tag ${{ env.BACKEND_IMAGE_NAME }}:${{ github.sha }} ${{ env.BACKEND_IMAGE_NAME }}:latest
+        npm ci --production
+        tar --exclude='node_modules/.cache' --exclude='*.log' --exclude='.env' \
+            -czf ../backend-app.tar.gz .
     
-    - name: Save Docker Images as Artifacts
-      run: |
-        docker save ${{ env.FRONTEND_IMAGE_NAME }}:latest | gzip > frontend-image.tar.gz
-        docker save ${{ env.BACKEND_IMAGE_NAME }}:latest | gzip > backend-image.tar.gz
-    
-    - name: Upload Frontend Image
+    - name: Upload Frontend Build
       uses: actions/upload-artifact@v4
       with:
-        name: frontend-docker-image
-        path: frontend-image.tar.gz
+        name: frontend-build
+        path: frontend-build.tar.gz
         retention-days: 1
     
-    - name: Upload Backend Image
+    - name: Upload Backend Package
       uses: actions/upload-artifact@v4
       with:
-        name: backend-docker-image
-        path: backend-image.tar.gz
+        name: backend-package
+        path: backend-app.tar.gz
         retention-days: 1
 
-  # Deploy to EC2 (only on merged PRs to main)
   deploy-to-ec2:
     name: "Deploy to Production"
-    needs: build-images
+    needs: build-applications
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production
     
     steps:
-    - name: Download Frontend Image
+    - name: Download Frontend Build
       uses: actions/download-artifact@v4
       with:
-        name: frontend-docker-image
+        name: frontend-build
     
-    - name: Download Backend Image
+    - name: Download Backend Package
       uses: actions/download-artifact@v4
       with:
-        name: backend-docker-image
+        name: backend-package
     
     - name: Prepare EC2 Environment
       uses: appleboy/ssh-action@v1.0.0
@@ -187,29 +182,27 @@ jobs:
         username: ${{ secrets.EC2_USERNAME }}
         key: ${{ secrets.EC2_PRIVATE_KEY }}
         script: |
-          # Create application directory structure
           mkdir -p ~/app/{frontend,backend,logs}
           
-          # Ensure Docker is running
-          sudo systemctl start docker
-          sudo systemctl enable docker
-          
-          # Install Docker Compose if not present
-          if ! command -v docker-compose &> /dev/null; then
-            echo "Installing Docker Compose..."
-            sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-            sudo chmod +x /usr/local/bin/docker-compose
-            echo "Docker Compose installed successfully"
+          if ! command -v node &> /dev/null; then
+            curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+            sudo apt-get install -y nodejs
           fi
           
-          # Ensure MongoDB is running
+          if ! command -v pm2 &> /dev/null; then
+            sudo npm install -g pm2
+          fi
+          
+          if ! command -v nginx &> /dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y nginx
+            sudo systemctl enable nginx
+          fi
+          
           sudo systemctl start mongod
           sudo systemctl enable mongod
+          timeout 30 bash -c 'until mongosh --eval "db.adminCommand({ping: 1})" >/dev/null 2>&1; do sleep 2; done'
           
-          # Wait for MongoDB to be ready
-          timeout 30 bash -c 'until mongosh --eval "db.adminCommand({ping: 1})" >/dev/null 2>&1; do sleep 2; done' || echo "MongoDB check timeout"
-          
-          # Create environment file for backend
           cat > ~/app/backend/.env << EOF
           NODE_ENV=production
           PORT=5001
@@ -222,52 +215,66 @@ jobs:
           DEFAULT_ADMIN_NAME=${{ secrets.DEFAULT_ADMIN_NAME }}
           EOF
           
-          # Debug MongoDB connection
-          echo "MongoDB connection debug:"
-          sudo systemctl status mongod
-          mongosh --eval "db.adminCommand({ping: 1})" || echo "MongoDB connection failed"
-          echo "MongoDB processes:"
-          ps aux | grep mongod
-          
-          # Create docker-compose file for easier management
-          cat > ~/app/docker-compose.yml << 'EOF'
-          services:
-            backend:
-              image: backend-api:latest
-              container_name: backend
-              restart: unless-stopped
-              network_mode: host
-              volumes:
-                - ./backend/.env:/app/.env:ro
-                - ./logs:/app/logs
-              healthcheck:
-                test: ["CMD", "curl", "-f", "http://localhost:5001/api/health"]
-                interval: 30s
-                timeout: 10s
-                retries: 3
-            
-            frontend:
-              image: frontend-app:latest
-              container_name: frontend
-              restart: unless-stopped
-              ports:
-                - "80:80"
-              depends_on:
-                - backend
-              healthcheck:
-                test: ["CMD", "curl", "-f", "http://localhost/health"]
-                interval: 30s
-                timeout: 10s
-                retries: 3
+          cat > ~/app/ecosystem.config.js << 'EOF'
+          module.exports = {
+            apps: [{
+              name: 'backend-api',
+              cwd: './backend',
+              script: 'server.js',
+              env: { NODE_ENV: 'production' },
+              instances: 1,
+              autorestart: true,
+              watch: false,
+              max_memory_restart: '1G',
+              error_file: './logs/backend-error.log',
+              out_file: './logs/backend-out.log',
+              log_file: './logs/backend-combined.log',
+              time: true
+            }]
+          };
           EOF
+          
+          sudo tee /etc/nginx/sites-available/sdlapp << 'EOF'
+          server {
+              listen 80;
+              server_name _;
+              root /home/$USER/app/frontend;
+              index index.html;
+              
+              location / {
+                  try_files $uri $uri/ /index.html;
+              }
+              
+              location /api/ {
+                  proxy_pass http://localhost:5001;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+                  proxy_cache_bypass $http_upgrade;
+              }
+              
+              location /health {
+                  access_log off;
+                  return 200 "healthy\n";
+                  add_header Content-Type text/plain;
+              }
+          }
+          EOF
+          
+          sudo ln -sf /etc/nginx/sites-available/sdlapp /etc/nginx/sites-enabled/
+          sudo rm -f /etc/nginx/sites-enabled/default
     
-    - name: Copy Docker Images to EC2
+    - name: Copy Application Files to EC2
       uses: appleboy/scp-action@v0.1.4
       with:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USERNAME }}
         key: ${{ secrets.EC2_PRIVATE_KEY }}
-        source: "frontend-image.tar.gz,backend-image.tar.gz"
+        source: "frontend-build.tar.gz,backend-app.tar.gz"
         target: ~/app/
     
     - name: Deploy Applications to EC2
@@ -279,100 +286,44 @@ jobs:
         script: |
           cd ~/app
           
-          echo "Starting deployment process..."
+          tar -xzf frontend-build.tar.gz -C frontend/
+          tar -xzf backend-app.tar.gz -C backend/
           
-          # Load new Docker images
-          echo "Loading Docker images..."
-          gunzip -c frontend-image.tar.gz | docker load
-          gunzip -c backend-image.tar.gz | docker load
+          pm2 stop ecosystem.config.js 2>/dev/null || true
+          pm2 delete all 2>/dev/null || true
           
-          # Stop existing containers gracefully
-          echo "Stopping existing containers..."
-          docker stop backend frontend 2>/dev/null || true
-          docker rm backend frontend 2>/dev/null || true
+          cd backend && npm ci --production --silent && cd ..
           
-          # Clean up old containers and unused images
-          echo "Cleaning up old resources..."
-          docker container prune -f
-          docker image prune -f
+          pm2 start ecosystem.config.js --env production
+          sudo systemctl reload nginx
           
-          # Start new containers
-          echo "Starting new containers..."
+          sleep 15
           
-          # Start backend container
-          docker run -d \
-            --name backend \
-            --restart unless-stopped \
-            --network host \
-            -v ~/app/backend/.env:/app/.env:ro \
-            -v ~/app/logs:/app/logs \
-            backend-api:latest
-          
-          # Start frontend container  
-          docker run -d \
-            --name frontend \
-            --restart unless-stopped \
-            -p 80:80 \
-            frontend-app:latest
-          
-          # Wait for services to be ready
-          echo "Waiting for services to start..."
-          sleep 30
-          
-          # Health check backend
-          echo "Checking backend health..."
           for i in {1..12}; do
             if curl -f http://localhost:5001/api/health >/dev/null 2>&1; then
-              echo "Backend is healthy!"
               break
             fi
-            echo "Backend health check attempt $i/12..."
-            
-            # Check backend container status and logs if failing
-            if [ $i -eq 6 ]; then
-              echo "Backend container status:"
-              docker ps --filter name=backend
-              echo "Backend container logs:"
-              docker logs backend --tail 20
-            fi
-            
             sleep 5
           done
           
-          # Health check frontend
-          echo "Checking frontend health..."
           for i in {1..12}; do
             if curl -f http://localhost/health >/dev/null 2>&1; then
-              echo "Frontend is healthy!"
               break
             fi
-            echo "Frontend health check attempt $i/12..."
             sleep 5
           done
           
-          # Final verification
-          echo "Final deployment verification..."
-          docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-          
-          # Test endpoints
           BACKEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5001/api/health || echo "000")
           FRONTEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/health || echo "000")
           
           if [ "$BACKEND_STATUS" = "200" ] && [ "$FRONTEND_STATUS" = "200" ]; then
-            echo "Deployment successful!"
-            echo "Frontend: http://${{ secrets.EC2_HOST }}"
-            echo "Backend API: http://${{ secrets.EC2_HOST }}:5001/api/health"
+            pm2 save
+            pm2 startup systemd -u $USER --hp $HOME
           else
-            echo "Deployment verification failed!"
-            echo "Backend status: $BACKEND_STATUS"
-            echo "Frontend status: $FRONTEND_STATUS"
             exit 1
           fi
           
-          # Clean up downloaded files
-          rm -f frontend-image.tar.gz backend-image.tar.gz
-          
-          echo "Deployment completed successfully!"
+          rm -f frontend-build.tar.gz backend-app.tar.gz
     
     - name: Deployment Summary
       if: always()
@@ -382,14 +333,7 @@ jobs:
         username: ${{ secrets.EC2_USERNAME }}
         key: ${{ secrets.EC2_PRIVATE_KEY }}
         script: |
-          echo "========================="
-          echo "DEPLOYMENT SUMMARY"
-          echo "========================="
-          echo "Time: $(date)"
-          echo "Commit: ${{ github.sha }}"
-          echo "Author: ${{ github.actor }}"
+          echo "Deployed: $(date)"
           echo "Frontend: http://${{ secrets.EC2_HOST }}"
           echo "Backend: http://${{ secrets.EC2_HOST }}:5001/api/health"
-          echo "Container Status:"
-          docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | head -3
-          echo "========================="
+          pm2 list --no-colors
