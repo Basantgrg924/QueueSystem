@@ -1,7 +1,7 @@
 {
-  "name": "task-manager-backend",
+  "name": "queue-management-backend",
   "version": "1.0.0",
-  "description": "Backend for Task Manager App",
+  "description": "Backend for Queue Management App",
   "main": "server.js",
   "scripts": {
     "test": "mocha src/**/*.test.js || echo 'No tests found or tests failed'",
@@ -28,7 +28,7 @@
     "nodemon": "^2.0.15",
     "sinon": "^19.0.2"
   },
-  "author": "Task Manager Team",
+  "author": "Basant Gurung",
   "license": "ISC",
   "keywords": []
 }
